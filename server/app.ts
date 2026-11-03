@@ -203,5 +203,6 @@ app.post(
 
 export function handleErrors(err: Error, _req: Request, res: Response, _next: NextFunction) {
   console.error(err);
+  if (err instanceof db.SetupError) return res.status(503).json({ error: err.message });
   res.status(500).json({ error: 'Something went wrong on the server' });
 }

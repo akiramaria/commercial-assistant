@@ -12,6 +12,8 @@ interface Store {
   items: PoolItem[];
   caseStudies: CaseStudy[];
   status: 'loading' | 'ready' | 'error';
+  /** The server's explanation when status is 'error', if it gave one. */
+  error: string;
   reload: () => void;
   /** Saves items, then uploads their files. Throws if the server rejects them. */
   addItems: (items: PoolItem[], files: Map<string, File>) => Promise<void>;
@@ -30,6 +32,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<PoolItem[]>([]);
   const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([]);
   const [status, setStatus] = useState<Store['status']>('loading');
+  const [error, setError] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const notify = useCallback((message: string) => {
@@ -44,7 +47,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setItems(i);
       setCaseStudies(c);
       setStatus('ready');
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '');
       setStatus('error');
     }
   }, []);
@@ -68,6 +72,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       items,
       caseStudies,
       status,
+      error,
       reload,
       toasts,
       notify,
@@ -136,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [items, caseStudies, status, reload, toasts, notify]);
+  }, [items, caseStudies, status, error, reload, toasts, notify]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

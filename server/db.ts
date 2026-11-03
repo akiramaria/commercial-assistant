@@ -11,7 +11,13 @@ type Row = Record<string, unknown>;
 /** Runs one statement. SQL is written with `?` placeholders and in syntax both databases accept. */
 type Query = (sql: string, params?: unknown[]) => Promise<Row[]>;
 
+/** A hosting setting is missing; the message tells the person what to add. */
+export class SetupError extends Error {}
+
 async function connect(): Promise<{ query: Query; where: string }> {
+  if (!PG_URL && process.env.VERCEL) {
+    throw new SetupError('No database is connected. In Vercel, open the project’s Storage tab, connect Neon (Postgres), then redeploy.');
+  }
   if (PG_URL) {
     const { default: pg } = await import('pg');
     const pool = new pg.Pool({ connectionString: PG_URL, max: 5 });
@@ -45,6 +51,8 @@ const conn = connect().then(async (c) => {
   for (const s of SCHEMA) await c.query(s);
   return c;
 });
+// Failures surface on each query instead; unhandled here, they would stop the server.
+conn.catch(() => undefined);
 const q: Query = async (sql, params) => (await conn).query(sql, params);
 
 /** Where the data lives, for the startup log. */
@@ -135,7 +143,7 @@ export async function clearSamples(): Promise<string[]> {
 
 // A brand-new local database starts with the Figma sample rows. A hosted one starts
 // empty and is filled by scripts/copy-to-vercel.ts.
-if (!PG_URL) {
+if (!PG_URL && !process.env.VERCEL) {
   void (async () => {
     const claimed = await q("INSERT INTO meta (key, value) VALUES ('seeded', ?) ON CONFLICT (key) DO NOTHING RETURNING key", [new Date().toISOString()]);
     if (claimed.length) {
@@ -144,5 +152,5 @@ if (!PG_URL) {
     }
     // Documents typed "Case study" before that rule existed still need their case-study record.
     for (const i of await listItems()) await ensureCaseStudyFor(i);
-  })();
+  })().catch((e) => console.error('Couldn’t prepare the local database:', e));
 }

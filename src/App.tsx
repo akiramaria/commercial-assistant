@@ -9,7 +9,9 @@ import { MatchBrief } from './pages/MatchBrief';
 
 export default function App() {
   const { parts, query } = useRoute();
-  const { toasts, status, reload } = useStore();
+  const { toasts, status, error, reload } = useStore();
+  // No message means no response at all; otherwise the server explained what's wrong.
+  const serverDown = !error || error.startsWith('Server error');
 
   let page;
   // Pages read the loaded data when they mount (e.g. a case study's sources), so wait for it.
@@ -18,8 +20,8 @@ export default function App() {
   } else if (status === 'error') {
     page = (
       <div className="state-msg">
-        <p className="placeholder-title">Can’t reach the server</p>
-        <p className="hint">Start it with npm run dev, then try again.</p>
+        <p className="placeholder-title">{serverDown ? 'Can’t reach the server' : 'The server can’t load the knowledge pool'}</p>
+        <p className="hint">{serverDown ? 'Start it with npm run dev, then try again.' : error}</p>
         <Button variant="secondary" onClick={reload}>
           Try again
         </Button>
