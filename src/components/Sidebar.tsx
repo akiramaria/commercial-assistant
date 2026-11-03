@@ -2,18 +2,20 @@ import { Icon, icons } from './icons';
 import { Button } from './ui';
 import { useAuth } from '../lib/auth';
 import { useStore } from '../lib/store';
-import { go } from '../lib/router';
+import { go, useRoute } from '../lib/router';
 
+// `sections` are the route prefixes that highlight each item; items without a path aren't built yet.
 const NAV = [
   { label: 'Home', icon: icons.navHome },
-  { label: 'Proposals', icon: icons.navProposals },
-  { label: 'Knowledge pool', icon: icons.navKnowledge, active: true },
+  { label: 'Proposals', icon: icons.navProposals, activeIcon: icons.navProposalsActive, path: '/proposals', sections: ['proposals', 'match'] },
+  { label: 'Knowledge pool', icon: icons.navKnowledgeIdle, activeIcon: icons.navKnowledge, path: '/pool/proposals', sections: ['pool', 'add', 'case-studies'] },
   { label: 'Rate card & rules', icon: icons.navRateCard },
   { label: 'Settings', icon: icons.navSettings },
 ];
 
 export function Sidebar() {
   const { notify } = useStore();
+  const { parts } = useRoute();
   const { email, signOut } = useAuth();
   const local = email.split('@')[0];
   const name = local.charAt(0).toUpperCase() + local.slice(1);
@@ -30,17 +32,20 @@ export function Sidebar() {
       </Button>
       <div style={{ height: 12 }} />
       <nav className="sidebar-nav">
-        {NAV.map((n) => (
-          <button
-            key={n.label}
-            className={`nav-item${n.active ? ' is-active' : ''}`}
-            onClick={n.active ? () => go('/pool/proposals') : notBuilt}
-            aria-current={n.active ? 'page' : undefined}
-          >
-            <Icon src={n.icon} size={20} />
-            <span>{n.label}</span>
-          </button>
-        ))}
+        {NAV.map((n) => {
+          const active = n.sections?.includes(parts[0]) ?? false;
+          return (
+            <button
+              key={n.label}
+              className={`nav-item${active ? ' is-active' : ''}`}
+              onClick={n.path ? () => go(n.path) : notBuilt}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon src={(active && n.activeIcon) || n.icon} size={20} />
+              <span>{n.label}</span>
+            </button>
+          );
+        })}
       </nav>
       <div className="sidebar-spacer" />
       <div className="sidebar-user">

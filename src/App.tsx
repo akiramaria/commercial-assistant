@@ -6,6 +6,7 @@ import { KnowledgePool } from './pages/KnowledgePool';
 import { AddToPool } from './pages/AddToPool';
 import { CaseStudyEditor } from './pages/CaseStudyEditor';
 import { MatchBrief } from './pages/MatchBrief';
+import { Proposals } from './pages/Proposals';
 
 export default function App() {
   const { parts, query } = useRoute();
@@ -35,8 +36,10 @@ export default function App() {
     const id = parts[1] === 'new' ? undefined : parts[1];
     // Keyed so switching between case studies resets the form.
     page = <CaseStudyEditor key={`${parts[1]}:${query.get('source') ?? ''}`} id={id} sourceId={query.get('source')} />;
-  } else {
+  } else if (parts[0] === 'pool') {
     page = <KnowledgePool tab={parts[1] ?? 'proposals'} />;
+  } else {
+    page = <Proposals />;
   }
 
   return (

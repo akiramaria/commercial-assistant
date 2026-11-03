@@ -94,8 +94,8 @@ export function MatchBrief() {
     <div className="page">
       <header className="page-header">
         <div className="crumbs">
-          <button type="button" className="link-quiet" onClick={() => go('/pool/case-studies')}>
-            Knowledge pool
+          <button type="button" className="link-quiet" onClick={() => go('/proposals')}>
+            Proposals
           </button>
           &nbsp;&nbsp;/&nbsp;&nbsp;Find case studies
         </div>
