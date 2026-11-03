@@ -179,9 +179,6 @@ export function KnowledgePool({ tab }: { tab: string }) {
         <Button variant="secondary" onClick={() => notify('SharePoint isn’t connected yet.')}>
           Import from SharePoint
         </Button>
-        <Button variant="secondary" onClick={() => go('/match')}>
-          Find case studies for a brief
-        </Button>
         <Button onClick={() => go('/add')}>+&nbsp;&nbsp;Add to knowledge pool</Button>
       </header>
 
