@@ -11,6 +11,8 @@ type Row = Record<string, unknown>;
 /** Runs one statement. SQL is written with `?` placeholders and in syntax both databases accept. */
 type Query = (sql: string, params?: unknown[]) => Promise<Row[]>;
 
+export const isNeon = (url: string) => /\.neon\.tech[:/]/.test(url);
+
 /** A hosting setting is missing; the message tells the person what to add. */
 export class SetupError extends Error {}
 
@@ -19,16 +21,20 @@ async function connect(): Promise<{ query: Query; where: string }> {
     throw new SetupError('No database is connected. In Vercel, open the project’s Storage tab, connect Neon (Postgres), then redeploy.');
   }
   if (PG_URL) {
+    const numbered = (sql: string) => {
+      let n = 0;
+      return sql.replace(/\?/g, () => `$${++n}`);
+    };
+    // Neon is reached over HTTPS: Vercel functions drop long-lived Postgres TLS connections to it.
+    if (isNeon(PG_URL)) {
+      const { neon } = await import('@neondatabase/serverless');
+      const sql = neon(PG_URL);
+      const query: Query = async (text, params = []) => (await sql.query(numbered(text), params)) as Row[];
+      return { query, where: 'Neon Postgres' };
+    }
     const { default: pg } = await import('pg');
     const pool = new pg.Pool({ connectionString: PG_URL, max: 5 });
-    const query: Query = async (sql, params = []) => {
-      let n = 0;
-      const res = await pool.query(
-        sql.replace(/\?/g, () => `$${++n}`),
-        params,
-      );
-      return res.rows;
-    };
+    const query: Query = async (sql, params = []) => (await pool.query(numbered(sql), params)).rows;
     return { query, where: 'Postgres' };
   }
   const { DatabaseSync } = await import('node:sqlite');

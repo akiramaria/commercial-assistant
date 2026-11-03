@@ -1,6 +1,7 @@
 // One-off: copies the local knowledge pool (server/data) into the hosted Postgres database and Blob store.
 // Put DATABASE_URL and BLOB_READ_WRITE_TOKEN from Vercel in .env.vercel, then run: npm run copy-to-vercel
 // Safe to run again: records are overwritten by id and files replaced.
+import { neon } from '@neondatabase/serverless';
 import { put } from '@vercel/blob';
 import { existsSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
@@ -15,8 +16,14 @@ if (!url || !process.env.BLOB_READ_WRITE_TOKEN) {
 }
 
 const local = new DatabaseSync(join(DATA_DIR, 'knowledge-pool.sqlite'), { readOnly: true });
-const remote = new pg.Client({ connectionString: url });
-await remote.connect();
+// Neon over HTTPS, like the hosted server; any other Postgres over a normal connection.
+const neonUrl = /\.neon\.tech[:/]/.test(url);
+const client = neonUrl ? undefined : new pg.Client({ connectionString: url });
+await client?.connect();
+const sql = neonUrl ? neon(url) : undefined;
+const remote = {
+  query: async (text: string, params: unknown[] = []) => (sql ? sql.query(text, params) : client!.query(text, params)),
+};
 
 await remote.query('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, added_at TEXT NOT NULL, sample INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL)');
 await remote.query('CREATE TABLE IF NOT EXISTS case_studies (id TEXT PRIMARY KEY, updated_at TEXT NOT NULL, sample INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL)');
@@ -59,5 +66,5 @@ for (const r of items) {
 }
 console.log(`Uploaded ${files} files.`);
 
-await remote.end();
+await client?.end();
 local.close();
