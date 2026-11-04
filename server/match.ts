@@ -165,16 +165,27 @@ async function library() {
 }
 
 export async function matchCaseStudies(req: MatchRequest): Promise<MatchResult> {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
     throw new MatchError('Add your ANTHROPIC_API_KEY to the .env file in the project folder, then restart the server.', 503);
+  }
+  if (/\s/.test(apiKey)) {
+    throw new MatchError('ANTHROPIC_API_KEY has a line break or space in it. Put only the key on that line, then restart the server.', 503);
   }
   const brief = await briefBlocks(req);
   const { caseStudies, pastWork } = await library();
   const count = req.count && req.count > 0 ? `The user wants ${req.count} case studies.` : 'The user did not say how many case studies they want.';
 
   // Keys that aren't scoped to a workspace must name one on every request.
-  const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
-  const client = new Anthropic(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {});
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  // Use only this project's settings. Without authToken: null and an explicit baseURL, the SDK would also
+  // pick up ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL inherited from whatever launched the server.
+  const client = new Anthropic({
+    apiKey,
+    authToken: null,
+    baseURL: 'https://api.anthropic.com',
+    ...(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {}),
+  });
   const stream = client.beta.messages.stream({
     model: MODEL,
     max_tokens: 32000,
