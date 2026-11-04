@@ -53,16 +53,51 @@ const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
 ];
 
-const conn = connect().then(async (c) => {
-  for (const s of SCHEMA) await c.query(s);
-  return c;
-});
-// Failures surface on each query instead; unhandled here, they would stop the server.
-conn.catch(() => undefined);
-const q: Query = async (sql, params) => (await conn).query(sql, params);
+// Connecting is retried on the next query if it fails. Caching a failed attempt would leave a
+// Vercel function broken for its whole life after one timeout while Neon wakes from sleep.
+let conn: Promise<{ query: Query; where: string }> | undefined;
+function ready() {
+  conn ??= connect()
+    .then(async (c) => {
+      for (const s of SCHEMA) await withRetry(() => c.query(s));
+      return c;
+    })
+    .catch((e) => {
+      conn = undefined;
+      throw e;
+    });
+  return conn;
+}
+
+/** Network drops and timeouts: worth another try. Neon errors keep the network error in `sourceError`/`cause`. */
+function isTransient(e: unknown): boolean {
+  const codes = ['ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'ECONNREFUSED', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'];
+  let x = e as { code?: string; message?: string; cause?: unknown; sourceError?: unknown } | undefined;
+  for (let depth = 0; x && depth < 5; depth++) {
+    if ((x.code && codes.includes(x.code)) || /fetch failed/i.test(x.message ?? '')) return true;
+    x = (x.sourceError ?? x.cause) as typeof x;
+  }
+  return false;
+}
+
+// Every statement here is safe to repeat (reads, upserts, deletes, CREATE IF NOT EXISTS).
+async function withRetry<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (e) {
+      if (attempt >= 3 || !isTransient(e)) throw e;
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+  }
+}
+
+// Start connecting at startup; failures surface on each query instead of stopping the server.
+ready().catch(() => undefined);
+const q: Query = (sql, params) => withRetry(async () => (await ready()).query(sql, params));
 
 /** Where the data lives, for the startup log. */
-export const location = async () => (await conn).where;
+export const location = async () => (await ready()).where;
 
 const parse = <T>(rows: Row[]) => rows.map((r) => JSON.parse(r.data as string) as T);
 
