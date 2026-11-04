@@ -20,6 +20,8 @@ import x from '../assets/icons/x.svg';
 import sparkle from '../assets/icons/sparkle.svg';
 import check from '../assets/icons/check.svg';
 import message from '../assets/icons/message.svg';
+import plus from '../assets/icons/plus.png';
+import send from '../assets/icons/send.png';
 
 // Icons exported from the Figma file. Each SVG carries its own width/height.
 export const icons = {
@@ -45,6 +47,8 @@ export const icons = {
   sparkle,
   check,
   message,
+  plus,
+  send,
 };
 
 export function Icon({ src, size, className }: { src: string; size: number; className?: string }) {

@@ -22,7 +22,7 @@ function loadSaved(): MatchResult | null {
   }
 }
 
-function toBase64(file: File): Promise<string> {
+export function toBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
@@ -230,7 +230,7 @@ export function MatchBrief() {
   );
 }
 
-function Results({
+export function Results({
   result,
   titleFor,
   exists,

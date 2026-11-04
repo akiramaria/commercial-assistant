@@ -7,6 +7,7 @@ import { AddToPool } from './pages/AddToPool';
 import { CaseStudyEditor } from './pages/CaseStudyEditor';
 import { MatchBrief } from './pages/MatchBrief';
 import { Proposals } from './pages/Proposals';
+import { Home } from './pages/Home';
 
 export default function App() {
   const { parts, query } = useRoute();
@@ -38,8 +39,10 @@ export default function App() {
     page = <CaseStudyEditor key={`${parts[1]}:${query.get('source') ?? ''}`} id={id} sourceId={query.get('source')} />;
   } else if (parts[0] === 'pool') {
     page = <KnowledgePool tab={parts[1] ?? 'proposals'} />;
-  } else {
+  } else if (parts[0] === 'proposals') {
     page = <Proposals />;
+  } else {
+    page = <Home />;
   }
 
   return (
