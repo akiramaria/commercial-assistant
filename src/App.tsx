@@ -7,6 +7,7 @@ import { AddToPool } from './pages/AddToPool';
 import { CaseStudyEditor } from './pages/CaseStudyEditor';
 import { MatchBrief } from './pages/MatchBrief';
 import { Proposals } from './pages/Proposals';
+import { ProposalFlow } from './pages/proposal/ProposalFlow';
 import { Home } from './pages/Home';
 
 export default function App() {
@@ -37,6 +38,9 @@ export default function App() {
     const id = parts[1] === 'new' ? undefined : parts[1];
     // Keyed so switching between case studies resets the form.
     page = <CaseStudyEditor key={`${parts[1]}:${query.get('source') ?? ''}`} id={id} sourceId={query.get('source')} />;
+  } else if (parts[0] === 'proposals' && parts[1]) {
+    // Keyed so opening another proposal starts fresh.
+    page = <ProposalFlow key={parts[1]} id={parts[1]} view={parts[2]} />;
   } else if (parts[0] === 'pool') {
     page = <KnowledgePool tab={parts[1] ?? 'proposals'} />;
   } else if (parts[0] === 'proposals') {

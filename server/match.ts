@@ -1,38 +1,14 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { MatchRequest, MatchResult } from '../src/lib/types.ts';
+import { AIError, askClaude, fileBlock, loadSkill, obj, str, strs, type Block } from './claude.ts';
 import * as db from './db.ts';
 import * as storage from './storage.ts';
 
-// skills/ sits at the project root here, and beside the bundled function on Vercel.
-const SKILL_DIR = join(
-  [join(import.meta.dirname, 'skills'), join(import.meta.dirname, '..', 'skills')].find(existsSync) ?? '',
-  'psykhe-case-study-curation',
-);
-const MODEL = 'claude-opus-5-5';
 
-export class MatchError extends Error {
-  readonly status: number;
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
-
-/** SKILL.md without its frontmatter, plus any reference files beside it. Read per request so edits apply at once. */
-function loadSkill(): string {
-  const skill = readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '');
-  const refsDir = join(SKILL_DIR, 'references');
-  const refs = existsSync(refsDir) ? readdirSync(refsDir).filter((f) => f.endsWith('.md')).sort() : [];
-  const parts = [skill.trim()];
-  for (const f of refs) parts.push(`<reference file="references/${f}">\n${readFileSync(join(refsDir, f), 'utf8').trim()}\n</reference>`);
-  if (!refs.includes('taxonomy.md')) {
-    parts.push(
-      'Note: references/taxonomy.md has not been provided. Classify work type, product surface, sector and sector group using your own judgement, apply the P1-P3 and S1-S3 levels as sensibly as you can, and say under Gaps that the taxonomy file is missing.',
-    );
-  }
-  return parts.join('\n\n');
+/** The case-study curation skill, with a note when its taxonomy reference is missing. */
+function curationSkill(): string {
+  const { text, refs } = loadSkill('psykhe-case-study-curation');
+  if (refs.includes('taxonomy.md')) return text;
+  return `${text}\n\nNote: references/taxonomy.md has not been provided. Classify work type, product surface, sector and sector group using your own judgement, apply the P1-P3 and S1-S3 levels as sensibly as you can, and say under Gaps that the taxonomy file is missing.`;
 }
 
 // How the skill maps onto this app. Kept separate from SKILL.md so the skill stays portable.
@@ -47,14 +23,6 @@ const APP_NOTES = `You are running inside PSYKHE's Knowledge Pool web app, so th
 - Return the curation note in the JSON format requested, using the exact ids from the library. Put clause references in "clause" (a section number, or a short quoted phrase if unnumbered). If the skill tells you to stop and ask, set status to "needs_input", put the question in "question" and leave the lists empty.
 - Fill "classifications" only for case studies you classified yourself.`;
 
-const str = { type: 'string' };
-const strs = { type: 'array', items: str };
-const obj = (properties: Record<string, unknown>) => ({
-  type: 'object',
-  properties,
-  required: Object.keys(properties),
-  additionalProperties: false,
-});
 
 const RESULT_SCHEMA = obj({
   status: { type: 'string', enum: ['ok', 'needs_input'] },
@@ -83,49 +51,31 @@ const RESULT_SCHEMA = obj({
   },
 });
 
-const TEXT_TYPES = /^text\/|^application\/(json|markdown)$/;
-
-/** Turns a file into a content block Claude can read: PDFs as documents, text as text. */
-function fileBlock(name: string, mime: string, data: Buffer): Anthropic.Beta.BetaContentBlockParam {
-  const isPdf = mime === 'application/pdf' || name.toLowerCase().endsWith('.pdf');
-  if (isPdf) {
-    return {
-      type: 'document',
-      title: name,
-      source: { type: 'base64', media_type: 'application/pdf', data: data.toString('base64') },
-    };
-  }
-  if (TEXT_TYPES.test(mime) || /\.(txt|md)$/i.test(name)) {
-    return { type: 'text', text: `<brief file="${name}">\n${data.toString('utf8')}\n</brief>` };
-  }
-  throw new MatchError(`“${name}” can’t be read here. Use a PDF or text file, or paste the brief’s text.`);
-}
-
-async function briefBlocks(req: MatchRequest): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
-  const blocks: Anthropic.Beta.BetaContentBlockParam[] = [];
+async function briefBlocks(req: MatchRequest): Promise<Block[]> {
+  const blocks: Block[] = [];
   if (req.itemId) {
     const item = await db.getItem(req.itemId);
-    if (!item) throw new MatchError('That item is no longer in the knowledge pool.', 404);
+    if (!item) throw new AIError('That item is no longer in the knowledge pool.', 404);
     if (item.kind === 'context') {
       blocks.push({ type: 'text', text: `<brief title="${item.title}">\n${item.body ?? ''}\n</brief>` });
     } else {
       const data = await storage.read(`files/${item.id}/`);
-      if (!data) throw new MatchError(`No file is stored for “${item.title}”.`, 404);
-      blocks.push(fileBlock(item.name, item.mime ?? '', data));
+      if (!data) throw new AIError(`No file is stored for “${item.title}”.`, 404);
+      blocks.push(await fileBlock(item.name, item.mime ?? '', data, 'brief'));
     }
   }
   if (req.file?.blobPath) {
     // Uploaded to Blob just for this search; read it once, then delete it.
-    if (!/^briefs\/[a-z0-9-]{1,64}\/$/i.test(req.file.blobPath)) throw new MatchError('Invalid brief upload.');
+    if (!/^briefs\/[a-z0-9-]{1,64}\/$/i.test(req.file.blobPath)) throw new AIError('Invalid brief upload.');
     const data = await storage.read(req.file.blobPath);
     await storage.remove(req.file.blobPath);
-    if (!data) throw new MatchError('The uploaded brief couldn’t be found. Try uploading it again.', 404);
-    blocks.push(fileBlock(req.file.name, req.file.mime, data));
+    if (!data) throw new AIError('The uploaded brief couldn’t be found. Try uploading it again.', 404);
+    blocks.push(await fileBlock(req.file.name, req.file.mime, data, 'brief'));
   } else if (req.file?.data) {
-    blocks.push(fileBlock(req.file.name, req.file.mime, Buffer.from(req.file.data, 'base64')));
+    blocks.push(await fileBlock(req.file.name, req.file.mime, Buffer.from(req.file.data, 'base64'), 'brief'));
   }
   if (req.text?.trim()) blocks.push({ type: 'text', text: `<brief>\n${req.text.trim()}\n</brief>` });
-  if (!blocks.length) throw new MatchError('Add a brief: paste its text, upload a file or pick an RFP from the pool.');
+  if (!blocks.length) throw new AIError('Add a brief: paste its text, upload a file or pick an RFP from the pool.');
   return blocks;
 }
 
@@ -165,66 +115,19 @@ async function library() {
 }
 
 export async function matchCaseStudies(req: MatchRequest): Promise<MatchResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) {
-    throw new MatchError('Add your ANTHROPIC_API_KEY to the .env file in the project folder, then restart the server.', 503);
-  }
-  if (/\s/.test(apiKey)) {
-    throw new MatchError('ANTHROPIC_API_KEY has a line break or space in it. Put only the key on that line, then restart the server.', 503);
-  }
   const brief = await briefBlocks(req);
   const { caseStudies, pastWork } = await library();
   const count = req.count && req.count > 0 ? `The user wants ${req.count} case studies.` : 'The user did not say how many case studies they want.';
-
-  // Keys that aren't scoped to a workspace must name one on every request.
-  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
-  // Use only this project's settings. Without authToken: null and an explicit baseURL, the SDK would also
-  // pick up ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL inherited from whatever launched the server.
-  const client = new Anthropic({
-    apiKey,
-    authToken: null,
-    baseURL: 'https://api.anthropic.com',
-    ...(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {}),
-  });
-  const stream = client.beta.messages.stream({
-    model: MODEL,
-    max_tokens: 32000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: RESULT_SCHEMA } },
-    system: [{ type: 'text', text: `${loadSkill()}\n\n${APP_NOTES}` }],
-    messages: [
+  return askClaude<MatchResult>({
+    system: `${curationSkill()}\n\n${APP_NOTES}`,
+    schema: RESULT_SCHEMA,
+    tooLong: 'The answer was too long to finish. Try asking for fewer case studies.',
+    content: [
+      ...brief,
       {
-        role: 'user',
-        content: [
-          ...brief,
-          {
-            type: 'text',
-            text: `<case_study_library>\n${JSON.stringify(caseStudies, null, 1)}\n</case_study_library>\n\n<past_work>\n${JSON.stringify(pastWork, null, 1)}\n</past_work>\n\n${count} Find the case studies that best evidence this brief.`,
-          },
-        ],
+        type: 'text',
+        text: `<case_study_library>\n${JSON.stringify(caseStudies, null, 1)}\n</case_study_library>\n\n<past_work>\n${JSON.stringify(pastWork, null, 1)}\n</past_work>\n\n${count} Find the case studies that best evidence this brief.`,
       },
     ],
   });
-
-  let message: Anthropic.Beta.BetaMessage;
-  try {
-    message = await stream.finalMessage();
-  } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new MatchError('The Anthropic API key was rejected. Check ANTHROPIC_API_KEY in .env.', 503);
-    if (e instanceof Anthropic.RateLimitError) throw new MatchError('Claude is busy right now. Try again in a minute.', 503);
-    if (e instanceof Anthropic.BadRequestError) throw new MatchError(`Claude couldn’t read the request: ${e.message}`, 400);
-    if (e instanceof Anthropic.APIError) throw new MatchError(`Claude returned an error (${e.status ?? 'network'}). Try again.`, 502);
-    throw e;
-  }
-
-  if (message.stop_reason === 'refusal') throw new MatchError('Claude declined to process this brief.', 502);
-  if (message.stop_reason === 'max_tokens') throw new MatchError('The answer was too long to finish. Try asking for fewer case studies.', 502);
-  const text = message.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
-  try {
-    return JSON.parse(text) as MatchResult;
-  } catch {
-    throw new MatchError('Claude’s answer couldn’t be read. Try again.', 502);
-  }
 }

@@ -1,4 +1,4 @@
-import type { CaseStudy, MatchRequest, MatchResult, PoolItem } from './types';
+import type { CaseStudy, MatchRequest, MatchResult, PoolItem, Proposal } from './types';
 
 async function request<T>(method: string, path: string, body?: unknown, raw?: Blob): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -55,4 +55,15 @@ export const api = {
   me: () => request<{ email: string }>('GET', '/auth/me'),
   login: (email: string, password: string) => request<{ email: string }>('POST', '/auth/login', { email, password }),
   logout: () => request<void>('POST', '/auth/logout'),
+  listProposals: () => request<Proposal[]>('GET', '/proposals'),
+  getProposal: (id: string) => request<Proposal>('GET', `/proposals/${id}`),
+  saveProposal: (p: Proposal) => request<Proposal>('PUT', `/proposals/${p.id}`, p),
+  deleteProposal: (id: string) => request<void>('DELETE', `/proposals/${id}`),
+  /** Uploads one of a proposal's files. The file must already be listed on the saved proposal. */
+  uploadSource: async (proposalId: string, fileId: string, file: File) =>
+    (await storageKind()) === 'blob'
+      ? toBlob(`sources/${fileId}/${blobName(file.name)}`, file)
+      : request<void>('PUT', `/proposals/${proposalId}/sources/${fileId}`, undefined, file),
+  analyseProposal: (id: string) => request<Proposal>('POST', `/proposals/${id}/analyse`),
+  findGaps: (id: string) => request<Proposal>('POST', `/proposals/${id}/gaps`),
 };

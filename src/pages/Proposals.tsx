@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon, icons } from '../components/icons';
 import { Button, Popover } from '../components/ui';
+import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
+import { dueLabel, initials, startProposal } from '../lib/proposals';
 import { go } from '../lib/router';
 import { useStore } from '../lib/store';
 
-// Built from the Figma "01 Proposals home" frame. Proposals aren't stored yet, so the
-// rows and figures are the design's sample data and stage changes last until reload.
+// Built from the Figma "01 Proposals home" frame. Proposals created in the app are listed first;
+// the rest of the rows and the figures are the design's sample data, and stage changes last until reload.
 
 type Stage = 'Drafting' | 'Submitted' | 'Won' | 'Lost';
 const STAGES: Stage[] = ['Drafting', 'Submitted', 'Won', 'Lost'];
@@ -18,6 +21,8 @@ interface Proposal {
   stage: Stage;
   due: string;
   value: string;
+  /** Created in the app, so it opens and can be deleted. */
+  saved?: boolean;
 }
 
 const SAMPLE: Proposal[] = [
@@ -40,7 +45,41 @@ const stageTone: Record<Stage, string> = { Drafting: 'pill', Submitted: 'pill', 
 
 export function Proposals() {
   const { notify } = useStore();
+  const { email } = useAuth();
   const [rows, setRows] = useState(SAMPLE);
+
+  useEffect(() => {
+    api.listProposals().then(
+      (saved) =>
+        setRows([
+          ...saved.map(
+            (p): Proposal => ({
+              id: p.id,
+              title: p.title || 'Untitled proposal',
+              client: p.client || '—',
+              owner: p.owner,
+              stage: 'Drafting',
+              due: dueLabel(p.deadline) || '—',
+              value: 'Not yet priced',
+              saved: true,
+            }),
+          ),
+          ...SAMPLE,
+        ]),
+      () => notify('Couldn’t load saved proposals.'),
+    );
+  }, [notify]);
+
+  const newProposal = () => startProposal(initials(email)).catch(() => notify('Couldn’t start a proposal. Try again.'));
+  const remove = async (r: Proposal) => {
+    if (!window.confirm(`Delete “${r.title}” and its uploaded files? This can’t be undone.`)) return;
+    try {
+      await api.deleteProposal(r.id);
+      setRows((cur) => cur.filter((x) => x.id !== r.id));
+    } catch {
+      notify('Couldn’t delete the proposal.');
+    }
+  };
   const [query, setQuery] = useState('');
   const [stage, setStage] = useState<Stage | 'All'>('All');
   const [owner, setOwner] = useState('Anyone');
@@ -53,7 +92,7 @@ export function Proposals() {
       (owner === 'Anyone' || r.owner === owner) &&
       words.every((w) => `${r.title} ${r.client}`.toLowerCase().includes(w)),
   );
-  const notBuilt = () => notify('Proposal pages aren’t built yet.');
+  const notBuilt = () => notify('This is sample data from the design; it doesn’t open.');
 
   return (
     <div className="pool">
@@ -68,7 +107,7 @@ export function Proposals() {
         <Button variant="secondary" onClick={() => go('/match')}>
           Find Case Studies
         </Button>
-        <Button onClick={() => notify('New proposals aren’t built yet.')}>+&nbsp;&nbsp;New proposal</Button>
+        <Button onClick={newProposal}>+&nbsp;&nbsp;New proposal</Button>
       </header>
 
       <div className="stat-row">
@@ -134,7 +173,7 @@ export function Proposals() {
             <div className="td td-menu" />
           </div>
           {shown.map((r) => (
-            <div key={r.id} className="tr" onClick={notBuilt}>
+            <div key={r.id} className="tr" onClick={r.saved ? () => go(`/proposals/${r.id}`) : notBuilt}>
               <div className="td td-main">{r.title}</div>
               <div className="td" style={{ width: 220 }}>{r.client}</div>
               <div className="td" style={{ width: 90 }}>
@@ -191,6 +230,18 @@ export function Proposals() {
                       >
                         Find case studies
                       </button>
+                      {r.saved && (
+                        <button
+                          type="button"
+                          className="menu-item menu-danger"
+                          onClick={() => {
+                            close();
+                            remove(r);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   )}
                 </Popover>

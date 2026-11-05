@@ -100,3 +100,93 @@ export interface MatchRequest {
   itemId?: string;
   count?: number;
 }
+
+// ---------- Proposals ----------
+
+export type ProposalStep = 'sources' | 'analysing' | 'brief' | 'gaps' | 'draft';
+
+export interface ProposalSource {
+  /** Also the storage id of the file (sources/<id>/ in Blob, or the file name in the local files folder). */
+  id: string;
+  /** Which card the file was added to. */
+  group: 'rfp' | 'notes' | 'logo';
+  name: string;
+  size: number;
+  mime: string;
+  /** What the file is: RFP, Addendum, Brief, BD notes, … */
+  tag: string;
+}
+
+export interface BriefPoint {
+  label: string;
+  text: string;
+  /** Where it came from, e.g. "RFP p.4" or "BD notes". Empty if not stated. */
+  source: string;
+}
+
+export interface ProposalAnalysis {
+  /** One or two sentences shown in the banner above the brief. */
+  headline: string;
+  /** Objective, Scope asked, Deliverables and Timeline first, then anything else the brief covers. */
+  summary: BriefPoint[];
+  requirements: BriefPoint[];
+  projectType: string;
+  sector: string;
+  engagementModel: string;
+  /** Why this approach, e.g. which past proposal the phases are based on. */
+  approachNote: string;
+  similarProposals: { itemId: string; match: number; why: string }[];
+  caseStudies: { caseStudyId: string; match: number; why: string }[];
+}
+
+export type AssumptionSource = 'Template' | 'Past proposal' | 'AI suggested' | 'Your answer';
+
+export interface GapQuestion {
+  id: string;
+  question: string;
+  /** Why it's a gap: what the sources do or don't say. */
+  why: string;
+  placeholder: string;
+  mode: 'answer' | 'placeholder';
+  answer: string;
+}
+
+export interface Assumption {
+  id: string;
+  text: string;
+  source: AssumptionSource;
+  /** Set when the assumption is an answer to one of the gap questions. */
+  questionId?: string;
+}
+
+export interface Proposal {
+  id: string;
+  title: string;
+  /** datetime-local value, e.g. 2026-11-14T17:00 */
+  deadline: string;
+  hubspotDeal: string;
+  serviceLine: string;
+  need: 'full' | 'pricing';
+  client: string;
+  includeSectorSlide: boolean;
+  sources: ProposalSource[];
+  notes: string;
+  step: ProposalStep;
+  /** Identifies the analysis or gap check in progress, so a cancelled run's result is ignored. */
+  runId?: string;
+  runStartedAt?: string;
+  /** The last run's error, shown on the page it came back to. */
+  runError?: string;
+  analysis?: ProposalAnalysis;
+  /** Selected references, as knowledge-pool item ids and case-study ids. */
+  references: string[];
+  caseStudyRefs: string[];
+  projectType: string;
+  sector: string;
+  engagementModel: string;
+  questions: GapQuestion[];
+  assumptions: Assumption[];
+  owner: string;
+  createdAt: string;
+  updatedAt: string;
+}

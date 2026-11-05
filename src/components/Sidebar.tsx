@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon, icons } from './icons';
 import { Button } from './ui';
 import { useAuth } from '../lib/auth';
+import { initials, startProposal } from '../lib/proposals';
 import { useStore } from '../lib/store';
 import { go, useRoute } from '../lib/router';
 
@@ -28,7 +29,7 @@ export function Sidebar() {
         <div className="sidebar-mark" />
         <span>Commercial Assistant</span>
       </div>
-      <Button className="w-full" onClick={() => notify('New proposals aren’t built yet.')}>
+      <Button className="w-full" onClick={() => startProposal(initials(email)).catch(() => notify('Couldn’t start a proposal. Try again.'))}>
         +&nbsp;&nbsp;New proposal
       </Button>
       <div style={{ height: 12 }} />

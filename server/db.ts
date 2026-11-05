@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CaseStudy, PoolItem } from '../src/lib/types.ts';
+import type { CaseStudy, PoolItem, Proposal } from '../src/lib/types.ts';
 import { seedCaseStudies, seedItems } from '../src/lib/seed.ts';
 
 // Postgres when DATABASE_URL is set (Vercel + Neon), otherwise a local SQLite file.
@@ -51,6 +51,7 @@ const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, added_at TEXT NOT NULL, sample INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL)',
   'CREATE TABLE IF NOT EXISTS case_studies (id TEXT PRIMARY KEY, updated_at TEXT NOT NULL, sample INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL)',
   'CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS proposals (id TEXT PRIMARY KEY, updated_at TEXT NOT NULL, data TEXT NOT NULL)',
 ];
 
 // Connecting is retried on the next query if it fails. Caching a failed attempt would leave a
@@ -141,6 +142,25 @@ export async function putCaseStudy(cs: CaseStudy) {
 
 export async function deleteCaseStudy(id: string) {
   await q('DELETE FROM case_studies WHERE id = ?', [id]);
+}
+
+export async function listProposals(): Promise<Proposal[]> {
+  return parse(await q('SELECT data FROM proposals ORDER BY updated_at DESC'));
+}
+
+export async function getProposal(id: string): Promise<Proposal | undefined> {
+  return parse<Proposal>(await q('SELECT data FROM proposals WHERE id = ?', [id]))[0];
+}
+
+export async function putProposal(p: Proposal) {
+  await q(
+    'INSERT INTO proposals (id, updated_at, data) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at, data = excluded.data',
+    [p.id, p.updatedAt, JSON.stringify(p)],
+  );
+}
+
+export async function deleteProposal(id: string) {
+  await q('DELETE FROM proposals WHERE id = ?', [id]);
 }
 
 /**

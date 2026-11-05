@@ -42,6 +42,16 @@ Restart the server after changing them. A session lasts 12 hours or until the br
 
 Matching calls Claude, so it needs an API key: copy `.env.example` to `.env`, add your key from console.anthropic.com and restart `npm run dev`. Each search sends the brief and a summary of every case study to Anthropic.
 
+## Creating a proposal
+
+**+ New proposal** opens a four-step flow (`src/pages/proposal/`): add sources, confirm the brief and approach, review gaps and assumptions, then draft (not built yet).
+Proposals are saved as they're edited, in the same database as the knowledge pool; their files are stored like knowledge-pool files.
+
+The two Claude steps follow `skills/proposal-brief/SKILL.md`: reading the brief (summary with Objective, Scope asked, Deliverables and Timeline always included,
+requirements, comparable past proposals and case studies) and finding gaps, client questions with placeholder answers, and assumptions.
+To have standard assumptions tagged "Template", add them to `skills/proposal-brief/references/assumptions-template.md`.
+Sources can be PDF, Word (.docx), PowerPoint (.pptx) or text; each step takes about 30 seconds to 2 minutes.
+
 ## Deploy to Vercel
 
 `npm run build:vercel` builds the app and packages it in `.vercel/output`: the front end as static files and the API

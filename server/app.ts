@@ -1,9 +1,11 @@
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from 'express';
-import type { CaseStudy, PoolItem } from '../src/lib/types.ts';
+import type { CaseStudy, PoolItem, Proposal } from '../src/lib/types.ts';
 import { missingTags } from '../src/lib/types.ts';
 import { authRoutes, requireAuth } from './auth.ts';
 import * as db from './db.ts';
-import { MatchError, matchCaseStudies } from './match.ts';
+import { AIError } from './claude.ts';
+import { matchCaseStudies } from './match.ts';
+import { runStep } from './proposals.ts';
 import * as storage from './storage.ts';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -28,10 +30,12 @@ function badRequest(res: Response, message: string) {
   res.status(400).json({ error: message });
 }
 
-app.param('id', (req, res, next, id: string) => {
-  if (!ID.test(id)) return badRequest(res, 'Invalid id');
-  next();
-});
+for (const name of ['id', 'fileId']) {
+  app.param(name, (req, res, next, id: string) => {
+    if (!ID.test(id)) return badRequest(res, 'Invalid id');
+    next();
+  });
+}
 
 app.get('/api/config', (_req, res) => {
   res.json({ storage: storage.usesBlob ? 'blob' : 'local' });
@@ -121,9 +125,10 @@ app.post(
       request: req,
       body: req.body,
       onBeforeGenerateToken: async (pathname) => {
-        const m = /^(files|briefs)\/([a-z0-9-]{1,64})\/[^/]+$/i.exec(pathname);
+        const m = /^(files|briefs|sources)\/([a-z0-9-]{1,64})\/[^/]+$/i.exec(pathname);
         if (!m) throw new Error('Invalid upload path');
         if (m[1] === 'files' && !(await db.getItem(m[2]))) throw new Error('Create the item first');
+        if (m[1] === 'sources' && !(await proposalWithSource(m[2]))) throw new Error('Add the file to a proposal first');
         return { maximumSizeInBytes: MAX_FILE_BYTES, addRandomSuffix: false, allowOverwrite: true };
       },
     });
@@ -176,6 +181,94 @@ app.delete(
   }),
 );
 
+// ---------- Proposals ----------
+
+const proposalWithSource = async (fileId: string) => (await db.listProposals()).find((p) => p.sources.some((s) => s.id === fileId));
+
+app.get(
+  '/api/proposals',
+  wrap(async (_req, res) => {
+    res.json(await db.listProposals());
+  }),
+);
+
+app.get(
+  '/api/proposals/:id',
+  wrap(async (req, res) => {
+    const p = await db.getProposal(req.params.id);
+    return p ? res.json(p) : res.status(404).json({ error: 'That proposal no longer exists.' });
+  }),
+);
+
+// Saves the whole proposal as the page holds it. The server owns runId and runStartedAt.
+app.put(
+  '/api/proposals/:id',
+  wrap(async (req, res) => {
+    const body = req.body as Proposal;
+    if (!body || typeof body.title !== 'string' || !Array.isArray(body.sources)) return badRequest(res, 'Invalid proposal');
+    if (body.sources.some((s) => !ID.test(s.id ?? ''))) return badRequest(res, 'Invalid file id');
+    const existing = await db.getProposal(req.params.id);
+    // Leaving a run (cancel, or going back) drops its id, so its result is ignored when it finishes.
+    const running = existing?.runId && body.step === existing.step;
+    const p: Proposal = {
+      ...body,
+      id: req.params.id,
+      runId: running ? existing.runId : undefined,
+      runStartedAt: running ? existing.runStartedAt : undefined,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.putProposal(p);
+    // Files removed from the proposal are deleted from storage too.
+    const kept = new Set(p.sources.map((s) => s.id));
+    await Promise.all((existing?.sources ?? []).filter((s) => !kept.has(s.id)).map((s) => storage.remove(`sources/${s.id}/`)));
+    res.json(p);
+  }),
+);
+
+app.delete(
+  '/api/proposals/:id',
+  wrap(async (req, res) => {
+    const p = await db.getProposal(req.params.id);
+    await db.deleteProposal(req.params.id);
+    await Promise.all((p?.sources ?? []).map((s) => storage.remove(`sources/${s.id}/`)));
+    res.status(204).end();
+  }),
+);
+
+// Local storage only: the request body is the file itself. The file must already be listed on the proposal.
+app.put(
+  '/api/proposals/:id/sources/:fileId',
+  wrap(async (req, res) => {
+    if (storage.usesBlob) return badRequest(res, 'Upload files to Blob storage instead');
+    const p = await db.getProposal(req.params.id);
+    if (!p?.sources.some((s) => s.id === req.params.fileId)) return res.status(404).json({ error: 'Add the file to the proposal first' });
+    if (Number(req.headers['content-length'] ?? 0) > MAX_FILE_BYTES) return res.status(413).json({ error: 'Files are limited to 50 MB' });
+    try {
+      await storage.saveLocal(req.params.fileId, req);
+      res.status(204).end();
+    } catch {
+      await storage.remove(`sources/${req.params.fileId}/`);
+      if (!res.headersSent) res.status(413).json({ error: 'Upload failed' });
+    }
+  }),
+);
+
+// Reads the sources (step 2) or finds gaps and assumptions (step 3). Takes a minute or two.
+for (const kind of ['analyse', 'gaps'] as const) {
+  app.post(
+    `/api/proposals/:id/${kind}`,
+    wrap(async (req, res) => {
+      try {
+        res.json(await runStep(req.params.id, kind));
+      } catch (e) {
+        if (e instanceof AIError) return res.status(e.status).json({ error: e.message });
+        throw e;
+      }
+    }),
+  );
+}
+
 // ---------- Case study matching ----------
 
 app.post(
@@ -184,7 +277,7 @@ app.post(
     try {
       res.json(await matchCaseStudies(req.body));
     } catch (e) {
-      if (e instanceof MatchError) return res.status(e.status).json({ error: e.message });
+      if (e instanceof AIError) return res.status(e.status).json({ error: e.message });
       throw e;
     }
   }),

@@ -23,6 +23,17 @@ import message from '../assets/icons/message.svg';
 import plus from '../assets/icons/plus.png';
 import send from '../assets/icons/send.png';
 
+import link12 from '../assets/icons/link-12.svg';
+import radioOff from '../assets/icons/radio-off.svg';
+import radioOn from '../assets/icons/radio-on.svg';
+import editMuted from '../assets/icons/edit-muted.svg';
+import edit from '../assets/icons/edit.svg';
+import sparkle18 from '../assets/icons/sparkle-18.svg';
+import sparkle22 from '../assets/icons/sparkle-22.svg';
+import stepPending from '../assets/icons/step-pending.svg';
+import spinner from '../assets/icons/spinner.svg';
+import check18 from '../assets/icons/check-18.svg';
+
 // Icons exported from the Figma file. Each SVG carries its own width/height.
 export const icons = {
   navHome,
@@ -49,6 +60,16 @@ export const icons = {
   message,
   plus,
   send,
+  link12,
+  radioOff,
+  radioOn,
+  editMuted,
+  edit,
+  sparkle18,
+  sparkle22,
+  stepPending,
+  spinner,
+  check18,
 };
 
 export function Icon({ src, size, className }: { src: string; size: number; className?: string }) {
