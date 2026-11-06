@@ -9,6 +9,9 @@ import { DATA_DIR } from './db.ts';
 // In Blob, an item's file lives at files/<item id>/<file name>; briefs sent for matching at briefs/<id>/<file name>.
 export const usesBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 export const FILES_DIR = join(DATA_DIR, 'files');
+// Vercel's disk is read-only, so there files only work once Blob storage is connected.
+export const NO_BLOB_MESSAGE =
+  'File storage isn’t connected. In Vercel, add BLOB_READ_WRITE_TOKEN under Settings → Environment Variables (Production), then redeploy.';
 try {
   if (!usesBlob) mkdirSync(FILES_DIR, { recursive: true });
 } catch {

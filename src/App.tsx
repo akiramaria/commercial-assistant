@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useRoute } from './lib/router';
 import { useStore } from './lib/store';
 import { Sidebar } from './components/Sidebar';
@@ -8,10 +9,14 @@ import { CaseStudyEditor } from './pages/CaseStudyEditor';
 import { MatchBrief } from './pages/MatchBrief';
 import { Proposals } from './pages/Proposals';
 import { ProposalFlow } from './pages/proposal/ProposalFlow';
-import { Home } from './pages/Home';
 
 export default function App() {
   const { parts, query } = useRoute();
+  // Proposals is the landing page: send the bare address and any unknown one (e.g. an old #/home link) there.
+  const known = ['proposals', 'pool', 'add', 'case-studies', 'match'].includes(parts[0]);
+  useEffect(() => {
+    if (!known || !window.location.hash) window.location.replace('#/proposals');
+  }, [known]);
   const { toasts, status, error, reload } = useStore();
   // No message means no response at all; otherwise the server explained what's wrong.
   const serverDown = !error || error.startsWith('Server error');
@@ -43,10 +48,8 @@ export default function App() {
     page = <ProposalFlow key={parts[1]} id={parts[1]} view={parts[2]} />;
   } else if (parts[0] === 'pool') {
     page = <KnowledgePool tab={parts[1] ?? 'proposals'} />;
-  } else if (parts[0] === 'proposals') {
-    page = <Proposals />;
   } else {
-    page = <Home />;
+    page = <Proposals />;
   }
 
   return (

@@ -98,6 +98,7 @@ app.put(
   '/api/items/:id/file',
   wrap(async (req, res) => {
     if (storage.usesBlob) return badRequest(res, 'Upload files to Blob storage instead');
+    if (process.env.VERCEL) return res.status(503).json({ error: storage.NO_BLOB_MESSAGE });
     if (!(await db.getItem(req.params.id))) return res.status(404).json({ error: 'Create the item first' });
     if (Number(req.headers['content-length'] ?? 0) > MAX_FILE_BYTES) return res.status(413).json({ error: 'Files are limited to 50 MB' });
     let bytes = 0;
@@ -121,6 +122,7 @@ app.post(
   wrap(async (req, res) => {
     if (!storage.usesBlob) return badRequest(res, 'Blob storage isn’t set up');
     const { handleUpload } = await import('@vercel/blob/client');
+    // Send the reason back (and log it) so a refused upload explains itself.
     const result = await handleUpload({
       request: req,
       body: req.body,
@@ -131,8 +133,11 @@ app.post(
         if (m[1] === 'sources' && !(await proposalWithSource(m[2]))) throw new Error('Add the file to a proposal first');
         return { maximumSizeInBytes: MAX_FILE_BYTES, addRandomSuffix: false, allowOverwrite: true };
       },
+    }).catch((e: Error) => {
+      console.error('Blob upload token refused:', e);
+      res.status(400).json({ error: e.message });
     });
-    res.json(result);
+    if (result) res.json(result);
   }),
 );
 
@@ -241,6 +246,7 @@ app.put(
   '/api/proposals/:id/sources/:fileId',
   wrap(async (req, res) => {
     if (storage.usesBlob) return badRequest(res, 'Upload files to Blob storage instead');
+    if (process.env.VERCEL) return res.status(503).json({ error: storage.NO_BLOB_MESSAGE });
     const p = await db.getProposal(req.params.id);
     if (!p?.sources.some((s) => s.id === req.params.fileId)) return res.status(404).json({ error: 'Add the file to the proposal first' });
     if (Number(req.headers['content-length'] ?? 0) > MAX_FILE_BYTES) return res.status(413).json({ error: 'Files are limited to 50 MB' });

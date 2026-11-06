@@ -367,33 +367,6 @@ button.pill-outline:hover { border-color: var(--ink-3); }
   .search-lg { width: 100%; }
 }
 
-/* ---------- Home ---------- */
-.home { display: flex; flex-direction: column; gap: 24px; padding: 67px 62px 48px; max-width: 1200px; }
-.home-title { font-size: 24px; font-weight: 500; line-height: normal; }
-.home-ask { background: rgba(235, 237, 239, 0.6); border-radius: 12px; padding: 40px 24px; }
-.home-ask-inner { width: min(702px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
-.home-ask-title { font-size: 18px; font-weight: 500; line-height: normal; margin-bottom: 4px; }
-.home-ask-sub { font-size: 16px; font-weight: 400; color: #6b6b6b; }
-.composer { display: flex; flex-direction: column; border: 1px solid #ededed; border-radius: 12px; overflow: hidden; }
-.composer:focus-within { border-color: var(--border-strong); }
-.composer-input { height: 122px; padding: 10px 12px; border: 0; resize: none; background: #fff; font-size: 14px; line-height: 18px; outline: none; }
-.composer-input::placeholder { color: #9f9f9f; }
-.composer-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9f9f9; border: 1px solid #f9f9f9; border-radius: 0 0 12px 12px; }
-.composer-attach { display: flex; padding: 8px; border: 1px solid #dfe1e3; border-radius: 12px; background: #f9f9f9; }
-.composer-attach img { opacity: 0.5; }
-.composer-attach:hover { background: #f0f0f0; }
-.composer-send { display: flex; padding: 8px; border: 0; border-radius: 10px; background: #000; }
-.composer-send:disabled { opacity: 0.35; }
-.composer-file { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 6px 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; font-size: 13px; }
-.composer-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
-.composer-file-remove { display: flex; padding: 2px; border: 0; background: transparent; border-radius: 4px; }
-.composer-file-remove:hover { background: var(--chip); }
-.home-results { display: flex; flex-direction: column; gap: 16px; width: min(702px, 100%); margin: 0 auto; }
-@media (max-width: 900px) {
-  .home { padding: 32px 16px; }
-  .home-ask { padding: 24px 16px; }
-}
-
 /* ---------- Modal ---------- */
 .modal-scrim { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(17, 17, 17, 0.3); }
 .modal { width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 24px; background: var(--surface); border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18); }

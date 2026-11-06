@@ -6,7 +6,7 @@ export interface Route {
 }
 
 function parse(): Route {
-  const raw = window.location.hash.replace(/^#\/?/, '') || 'home';
+  const raw = window.location.hash.replace(/^#\/?/, '') || 'proposals';
   const [path, qs = ''] = raw.split('?');
   return { parts: path.split('/').filter(Boolean), query: new URLSearchParams(qs) };
 }

@@ -64,8 +64,9 @@ export function SourcesStep({ p, update, save, track, uploading }: Props) {
       return;
     }
     for (const { source, file } of ok) {
-      track(source.id, api.uploadSource(p.id, source.id, file)).catch(() => {
-        notify(`“${file.name}” didn’t upload. Try adding it again.`);
+      track(source.id, api.uploadSource(p.id, source.id, file)).catch((e: unknown) => {
+        console.error('Upload failed', e);
+        notify(`“${file.name}” didn’t upload: ${e instanceof Error ? e.message : 'unknown error'}`);
         update((cur) => ({ sources: cur.sources.filter((s) => s.id !== source.id) }));
       });
     }

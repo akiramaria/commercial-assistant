@@ -8,7 +8,7 @@ import { go, useRoute } from '../lib/router';
 
 // `sections` are the route prefixes that highlight each item; items without a path aren't built yet.
 const NAV = [
-  { label: 'Home', icon: icons.navHome, path: '/home', sections: ['home'] },
+  { label: 'Home', icon: icons.navHome },
   { label: 'Proposals', icon: icons.navProposals, activeIcon: icons.navProposalsActive, path: '/proposals', sections: ['proposals', 'match'] },
   { label: 'Knowledge pool', icon: icons.navKnowledgeIdle, activeIcon: icons.navKnowledge, path: '/pool/proposals', sections: ['pool', 'add', 'case-studies'] },
   { label: 'Rate card & rules', icon: icons.navRateCard },
@@ -35,7 +35,7 @@ export function Sidebar() {
       <div style={{ height: 12 }} />
       <nav className="sidebar-nav">
         {NAV.map((n) => {
-          const active = n.sections?.includes(parts[0] || 'home') ?? false;
+          const active = n.sections?.includes(parts[0] || 'proposals') ?? false;
           return (
             <button
               key={n.label}
